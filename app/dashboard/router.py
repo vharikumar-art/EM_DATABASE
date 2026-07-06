@@ -21,11 +21,20 @@ def _dashboard_query(
 
 @router.get("/employee", response_model=ApiResponse)
 async def employee_dashboard(
+    employeeId: str | None = Query(default=None),
     query: DashboardQuery = Depends(_dashboard_query),
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    employee = await get_employee_by_user_id(current_user.user_id)
-    data = await service.get_employee_dashboard(employee["id"], query)
+    if current_user.role == "admin":
+        if not employeeId:
+            from app.core.exceptions import BadRequestException
+            raise BadRequestException("Admins must provide employeeId to view an employee dashboard, or use /dashboard/admin")
+        target_employee_id = employeeId
+    else:
+        employee = await get_employee_by_user_id(current_user.user_id)
+        target_employee_id = employee["id"]
+        
+    data = await service.get_employee_dashboard(target_employee_id, query)
     return ApiResponse(message="Employee dashboard fetched", data=data)
 
 
