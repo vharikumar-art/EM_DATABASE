@@ -10,6 +10,8 @@ from app.schemas.common import PaginationParams
 from app.utils.csv_utils import parse_file_bytes, validate_and_clean_rows
 from app.utils.pagination import build_paginated_response
 from app.utils.response import serialize_list
+from app.notifications.service import create_notification
+from app.notifications.schema import NotificationType
 
 COLLECTION = "emails"
 
@@ -72,6 +74,13 @@ async def upload_file(employee_id: str, file_bytes: bytes, filename: str, insert
             sent_count=0,
             run_date=datetime.now(timezone.utc),
         )
+    )
+
+    total_uploaded = len(valid_rows) + failed_count
+    await create_notification(
+        employee_id=employee_id,
+        message=f"Upload complete: {total_uploaded} records processed ({unique_count} unique).",
+        type=NotificationType.SUCCESS if unique_count > 0 else NotificationType.WARNING,
     )
 
     return {

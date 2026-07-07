@@ -5,6 +5,8 @@ from app.database.mongodb import get_collection
 from app.profiles.model import MAX_PROFILES_PER_EMPLOYEE, build_profile_document
 from app.profiles.schema import ProfileCreate, ProfileUpdate
 from app.utils.response import serialize_doc, to_object_id
+from app.notifications.service import create_notification
+from app.notifications.schema import NotificationType
 
 COLLECTION = "profiles"
 
@@ -35,6 +37,13 @@ async def create_profile(employee_id: str, payload: ProfileCreate) -> dict:
     )
     result = await profiles.insert_one(doc)
     created = await profiles.find_one({"_id": result.inserted_id})
+
+    await create_notification(
+        employee_id=employee_id,
+        message=f"New profile '{payload.profileName}' was created successfully.",
+        type=NotificationType.INFO,
+    )
+
     return serialize_doc(created)
 
 
