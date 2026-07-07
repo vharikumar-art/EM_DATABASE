@@ -27,7 +27,6 @@ async def get_employee_dashboard(employee_id: str, query: DashboardQuery) -> dic
     last_7_days_upload_count = await _count_uploads_since(employee_id, last_7_start)
 
     unique_count = await emails.count_documents({**range_match, "isDuplicate": False})
-    duplicate_count = await emails.count_documents({**range_match, "isDuplicate": True})
 
     sent_pipeline = [
         {
@@ -81,11 +80,13 @@ async def get_employee_dashboard(employee_id: str, query: DashboardQuery) -> dic
     )
     recent_upload_history = serialize_list([d async for d in recent_upload_cursor])
 
+    total_upload_count = await emails.count_documents(range_match)
+
     return {
         "todayUploadCount": today_upload_count,
         "last7DaysUploadCount": last_7_days_upload_count,
+        "totalUploadCount": total_upload_count,
         "uniqueEmailCount": unique_count,
-        "duplicateEmailCount": duplicate_count,
         "sentEmailCount": sent_email_count,
         "profileStatistics": profile_stats,
         "recentUploadHistory": recent_upload_history,
@@ -104,7 +105,6 @@ async def get_admin_dashboard(query: DashboardQuery) -> dict:
     total_employees = await employees.count_documents({})
     total_uploads = await emails.count_documents(range_match)
     total_unique_emails = await emails.count_documents({**range_match, "isDuplicate": False})
-    total_duplicate_emails = await emails.count_documents({**range_match, "isDuplicate": True})
 
     # Employee ranking: uploads + sent counts within range, grouped by employeeId.
     ranking_pipeline = [
@@ -151,12 +151,47 @@ async def get_admin_dashboard(query: DashboardQuery) -> dict:
         async for row in profiles.aggregate(profile_usage_pipeline)
     ]
 
+    # Total sent across the date range
+    total_sent_pipeline = [
+        {"$match": {"action": "CAMPAIGN_COMPLETED", "runDate": {"$gte": start_dt, "$lte": end_dt}}},
+        {"$group": {"_id": None, "totalSent": {"$sum": "$sentCount"}}},
+    ]
+    total_sent_result = await logs.aggregate(total_sent_pipeline).to_list(length=1)
+    total_sent_emails = total_sent_result[0]["totalSent"] if total_sent_result else 0
+
+    # Top 7 days upload ranking — always fixed to last 7 days regardless of selected range
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    last_7_start = today_start - timedelta(days=6)
+    last_7_match = {"createdAt": {"$gte": last_7_start, "$lte": now}}
+    top_7_pipeline = [
+        {"$match": last_7_match},
+        {"$group": {"_id": "$employeeId", "uploadedCount": {"$sum": 1}}},
+        {"$sort": {"uploadedCount": -1}},
+        {"$limit": 10},
+    ]
+    top_7_rows = await emails.aggregate(top_7_pipeline).to_list(length=10)
+    top_7_days_upload_ranking = []
+    for row in top_7_rows:
+        emp_id = row["_id"]
+        employee_doc = await employees.find_one({"_id": _safe_object_id(emp_id)})
+        emp_name = None
+        if employee_doc:
+            user = await get_collection("users").find_one({"_id": _safe_object_id(employee_doc["userId"])})
+            emp_name = user["name"] if user else None
+        top_7_days_upload_ranking.append({
+            "employeeId": emp_id,
+            "employeeName": emp_name or "Unknown",
+            "uploadedCount": row["uploadedCount"],
+        })
+
     return {
         "totalEmployees": total_employees,
         "totalUploads": total_uploads,
         "totalUniqueEmails": total_unique_emails,
-        "totalDuplicateEmails": total_duplicate_emails,
+        "totalSentEmails": total_sent_emails,
         "employeeRanking": employee_ranking,
+        "top7DaysUploadRanking": top_7_days_upload_ranking,
         "employeeStatistics": employee_statistics,
         "recentActivities": recent_activities,
         "profileUsage": profile_usage,

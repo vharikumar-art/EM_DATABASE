@@ -7,7 +7,7 @@ async def create_indexes() -> None:
     await db["users"].create_index("email", unique=True)
 
     await db["employees"].create_index("userId", unique=True)
-    await db["employees"].create_index("employeeCode", unique=True)
+    await db["employees"].create_index("employeeCode", unique=True, sparse=True)
 
     await db["profiles"].create_index("employeeId")
     await db["profiles"].create_index([("employeeId", 1), ("profileName", 1)], unique=True)

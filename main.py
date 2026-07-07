@@ -17,6 +17,7 @@ from app.logs.router import router as logs_router
 from app.middleware.error_handler import register_exception_handlers
 from app.middleware.logging_middleware import RequestLoggingMiddleware
 from app.n8n.router import router as n8n_router
+from app.notifications.router import router as notifications_router
 from app.profiles.router import router as profiles_router
 from app.reports.router import router as reports_router
 from app.users.router import router as users_router
@@ -59,6 +60,7 @@ app.include_router(dashboard_router)
 app.include_router(logs_router)
 app.include_router(n8n_router)
 app.include_router(reports_router)
+app.include_router(notifications_router)
 
 
 @app.get("/health", tags=["Health"])
