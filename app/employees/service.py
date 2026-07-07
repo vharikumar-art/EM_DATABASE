@@ -22,7 +22,7 @@ async def create_employee(payload: EmployeeCreate) -> dict:
             name=payload.name,
             email=payload.email,
             password=payload.password,
-            role=UserRole.EMPLOYEE,
+            role=payload.role,
         )
     )
 

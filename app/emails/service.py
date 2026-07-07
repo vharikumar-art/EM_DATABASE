@@ -22,7 +22,8 @@ async def upload_file(employee_id: str, file_bytes: bytes, filename: str, insert
     except ValueError as exc:
         raise BadRequestException(str(exc)) from exc
 
-    valid_rows, failed_count = validate_and_clean_rows(df)
+    valid_rows, invalid_rows = validate_and_clean_rows(df)
+    failed_count = len(invalid_rows)
     if not valid_rows:
         raise BadRequestException("No valid email rows found in the uploaded file")
 
@@ -40,11 +41,14 @@ async def upload_file(employee_id: str, file_bytes: bytes, filename: str, insert
     unique_count = 0
     duplicate_count = 0
 
+    duplicate_emails = []
+
     for row in valid_rows:
         email_addr = row["email"]
         is_dup = email_addr in existing_emails or email_addr in seen_in_batch
         if is_dup:
             duplicate_count += 1
+            duplicate_emails.append(row)
             if not insert_duplicates:
                 continue
         else:
@@ -76,6 +80,9 @@ async def upload_file(employee_id: str, file_bytes: bytes, filename: str, insert
         "duplicate": duplicate_count,
         "failed": failed_count,
         "uploadBatch": upload_batch,
+        "emails": serialize_list(docs_to_insert[:15]),
+        "duplicateEmails": duplicate_emails[:15],
+        "failedEmails": invalid_rows[:15],
     }
 
 
@@ -132,3 +139,32 @@ async def get_emails_for_profile(profile_id: str, employee_id: str, is_admin: bo
     cursor = emails.find(query).limit(daily_limit)
     docs = serialize_list([d async for d in cursor])
     return docs
+
+
+async def get_dropdown_options(employee_id: str) -> dict:
+    emails = get_collection(COLLECTION)
+    profiles_col = get_collection("profiles")
+
+    # Fetch distinct values
+    domains = await emails.distinct("domain", {"employeeId": employee_id})
+    countries = await emails.distinct("country", {"employeeId": employee_id})
+    states = await emails.distinct("state", {"employeeId": employee_id})
+
+    # Filter out empty strings and None
+    domains = sorted([d for d in domains if d])
+    countries = sorted([c for c in countries if c])
+    states = sorted([s for s in states if s])
+
+    # Fetch profiles
+    cursor = profiles_col.find({"employeeId": employee_id}, {"profileName": 1})
+    profiles = serialize_list([p async for p in cursor])
+    
+    # We map profiles to only return id and name if desired, but serialize_list handles _id -> id
+    profiles_list = [{"id": p["id"], "name": p.get("profileName", "Unnamed Profile")} for p in profiles]
+
+    return {
+        "profiles": profiles_list,
+        "domains": domains,
+        "countries": countries,
+        "states": states,
+    }

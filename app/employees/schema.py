@@ -2,11 +2,13 @@ from pydantic import BaseModel, EmailStr, Field
 
 from app.employees.model import EmployeeStatus
 
+from app.users.model import UserRole
 
 class EmployeeCreate(BaseModel):
     name: str = Field(min_length=2, max_length=100)
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
+    role: UserRole = UserRole.EMPLOYEE
 
 
 class EmployeeUpdate(BaseModel):

@@ -26,6 +26,24 @@ async def upload_emails(
     return ApiResponse(message="File processed", data=result)
 
 
+@router.get("/dropdown-options", response_model=ApiResponse)
+async def get_dropdown_options(
+    employeeId: str | None = Query(default=None),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    if current_user.role == "admin":
+        if not employeeId:
+            from app.core.exceptions import BadRequestException
+            raise BadRequestException("employeeId is required for admins")
+        target_employee_id = employeeId
+    else:
+        employee = await get_employee_by_user_id(current_user.user_id)
+        target_employee_id = employee["id"]
+
+    result = await service.get_dropdown_options(target_employee_id)
+    return ApiResponse(message="Dropdown options fetched", data=result)
+
+
 @router.get("", response_model=ApiResponse)
 async def list_emails(
     employeeId: str | None = Query(default=None),

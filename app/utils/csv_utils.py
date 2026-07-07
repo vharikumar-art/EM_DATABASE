@@ -59,22 +59,23 @@ def parse_file_bytes(file_bytes: bytes, filename: str) -> pd.DataFrame:
     return df
 
 
-def validate_and_clean_rows(df: pd.DataFrame) -> tuple[list[dict[str, Any]], int]:
+def validate_and_clean_rows(df: pd.DataFrame) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """
-    Returns (valid_rows, invalid_count).
+    Returns (valid_rows, invalid_rows).
     Each valid row is a dict ready for duplicate checking / insertion.
     """
     valid_rows: list[dict[str, Any]] = []
-    invalid_count = 0
+    invalid_rows: list[dict[str, Any]] = []
 
     for _, row in df.iterrows():
         raw_email = str(row.get("email", "")).strip()
+        record = {field: (str(row[field]).strip() if field in df.columns else "") for field in FIELD_ALIASES}
         if not is_valid_email(raw_email):
-            invalid_count += 1
+            record["email"] = raw_email
+            invalid_rows.append(record)
             continue
 
-        record = {field: (str(row[field]).strip() if field in df.columns else "") for field in FIELD_ALIASES}
         record["email"] = normalize_email(raw_email)
         valid_rows.append(record)
 
-    return valid_rows, invalid_count
+    return valid_rows, invalid_rows
