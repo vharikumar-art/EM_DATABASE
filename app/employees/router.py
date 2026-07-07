@@ -9,8 +9,18 @@ router = APIRouter(prefix="/employees", tags=["Employees"])
 
 
 @router.post("", response_model=ApiResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_admin)])
-async def create_employee(payload: EmployeeCreate):
+async def create_employee(payload: EmployeeCreate, current_user: CurrentUser = Depends(get_current_user)):
     employee = await service.create_employee(payload)
+    
+    from app.notifications.service import create_notification
+    from app.notifications.schema import NotificationType
+    
+    await create_notification(
+        employee_id=current_user.user_id,
+        message=f"New employee/user '{payload.name}' was created successfully.",
+        type=NotificationType.SUCCESS,
+    )
+    
     return ApiResponse(message="Employee created successfully", data=employee)
 
 
