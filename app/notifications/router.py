@@ -16,10 +16,10 @@ router = APIRouter(prefix="/notifications", tags=["Notifications"])
 
 async def _resolve_employee_id(current_user: CurrentUser, employee_id_query: str | None) -> str:
     if current_user.role == "admin":
-        if not employee_id_query:
-            from app.core.exceptions import BadRequestException
-            raise BadRequestException("employeeId query parameter is required for admin requests")
-        return employee_id_query
+        # If an admin provides an employeeId, view that employee's notifications.
+        # Otherwise, default to the admin's own user_id.
+        return employee_id_query or current_user.user_id
+    
     employee = await get_employee_by_user_id(current_user.user_id)
     return employee["id"]
 
