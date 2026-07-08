@@ -77,3 +77,10 @@ async def update_user(user_id: str, payload: UserUpdate) -> dict:
     if not result:
         raise NotFoundException("User not found")
     return serialize_doc(result)
+
+
+async def delete_user(user_id: str) -> None:
+    users = get_collection(COLLECTION)
+    result = await users.delete_one({"_id": to_object_id(user_id)})
+    if result.deleted_count == 0:
+        raise NotFoundException("User not found")

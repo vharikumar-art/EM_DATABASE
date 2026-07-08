@@ -28,8 +28,10 @@ async def create_employee(payload: EmployeeCreate) -> dict:
 
     try:
         doc = build_employee_document(
-            user_id=user["id"]
+            user_id=user["id"],
+            branch=payload.branch,
         )
+
         result = await employees.insert_one(doc)
         created = await employees.find_one({"_id": result.inserted_id})
         employee_out = serialize_doc(created)
@@ -58,7 +60,9 @@ async def list_employees() -> list[dict]:
     employees = get_collection(COLLECTION)
     cursor = employees.find({})
     docs = [serialize_doc(d) async for d in cursor]
-    return [await _attach_user_info(d) for d in docs]
+    # include_password=True so the frontend Accounts table can display it
+    return [await _attach_user_info(d, include_password=True) for d in docs]
+
 
 
 async def get_employee(employee_id: str) -> dict:

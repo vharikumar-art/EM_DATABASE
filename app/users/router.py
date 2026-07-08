@@ -30,3 +30,9 @@ async def get_user(user_id: str):
 async def update_user(user_id: str, payload: UserUpdate):
     user = await service.update_user(user_id, payload)
     return ApiResponse(message="User updated", data=user)
+
+
+@router.delete("/{user_id}", response_model=ApiResponse, dependencies=[Depends(require_admin)])
+async def delete_user(user_id: str):
+    await service.delete_user(user_id)
+    return ApiResponse(message="User deleted")

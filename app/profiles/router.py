@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Query
 
 from app.core.dependencies import CurrentUser, get_current_user
 from app.employees.service import get_employee_by_user_id
+from app.emails.service import get_emails_for_profile
 from app.profiles import service
 from app.profiles.schema import ProfileCreate, ProfileUpdate
 from app.schemas.common import ApiResponse
@@ -65,6 +66,22 @@ async def update_profile(
     )
     profile = await service.update_profile(profile_id, employee_id, current_user.role == "admin", payload)
     return ApiResponse(message="Profile updated", data=profile)
+
+
+@router.get("/{profile_id}/emails", response_model=ApiResponse)
+async def get_profile_emails(
+    profile_id: str,
+    employeeId: str | None = Query(default=None),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    employee_id = await _resolve_employee_id(current_user, employeeId)
+    emails = await get_emails_for_profile(
+        profile_id,
+        employee_id,
+        current_user.role == "admin",
+        notify_admins=current_user.role != "admin",
+    )
+    return ApiResponse(message="Emails fetched for profile", data=emails)
 
 
 @router.post("/{profile_id}/activate", response_model=ApiResponse)

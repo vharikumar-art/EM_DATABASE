@@ -13,6 +13,14 @@ from app.utils.response import serialize_list
 from app.notifications.service import create_notification
 from app.notifications.schema import NotificationType
 
+
+def build_profile_email_notification_message(profile_name: str, email_count: int) -> str:
+    if email_count <= 0:
+        return f"Employee fetched 0 emails from profile '{profile_name}'."
+    if email_count == 1:
+        return f"Employee fetched 1 email from profile '{profile_name}'."
+    return f"Employee fetched {email_count} emails from profile '{profile_name}'."
+
 COLLECTION = "emails"
 
 
@@ -124,7 +132,12 @@ async def list_emails(
     return build_paginated_response(docs, total, params)
 
 
-async def get_emails_for_profile(profile_id: str, employee_id: str, is_admin: bool):
+async def get_emails_for_profile(
+    profile_id: str,
+    employee_id: str,
+    is_admin: bool,
+    notify_admins: bool = False,
+):
     """Dynamically query the emails collection using a profile's stored filter options."""
     profile = await get_profile(profile_id, employee_id, is_admin)
     options = profile["options"]
@@ -147,6 +160,14 @@ async def get_emails_for_profile(profile_id: str, employee_id: str, is_admin: bo
     emails = get_collection(COLLECTION)
     cursor = emails.find(query).limit(daily_limit)
     docs = serialize_list([d async for d in cursor])
+
+    if notify_admins:
+        await create_notification(
+            employee_id=profile["employeeId"],
+            message=build_profile_email_notification_message(profile.get("profileName", "Unnamed profile"), len(docs)),
+            type=NotificationType.INFO,
+        )
+
     return docs
 
 

@@ -9,11 +9,15 @@ class EmployeeCreate(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
     role: UserRole = UserRole.EMPLOYEE
+    branch: str | None = None
+
 
 
 class EmployeeUpdate(BaseModel):
     department: str | None = None
+    branch: str | None = None
     status: EmployeeStatus | None = None
+
 
 
 class EmployeeOut(BaseModel):

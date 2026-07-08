@@ -7,6 +7,7 @@ def serialize_doc(doc: dict[str, Any] | None) -> dict[str, Any] | None:
     """Convert a MongoDB document into a JSON-safe dict with `id` instead of `_id`."""
     if doc is None:
         return None
+    from datetime import datetime
     result = dict(doc)
     _id = result.pop("_id", None)
     if _id is not None:
@@ -14,6 +15,10 @@ def serialize_doc(doc: dict[str, Any] | None) -> dict[str, Any] | None:
     for key, value in result.items():
         if isinstance(value, ObjectId):
             result[key] = str(value)
+        elif isinstance(value, datetime):
+            # Always serialize as UTC ISO string with Z suffix so the frontend
+            # correctly interprets the timestamp as UTC (not local time).
+            result[key] = value.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
     return result
 
 

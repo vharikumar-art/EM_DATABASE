@@ -1,14 +1,10 @@
-import asyncio
-import json
-
-from fastapi import APIRouter, Depends, Query
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 
 from app.core.dependencies import CurrentUser, get_current_user
-from app.core.exceptions import UnauthorizedException
 from app.core.security import decode_token
 from app.employees.service import get_employee_by_user_id
-from app.notifications import service, stream
+from app.notifications import service
+from app.notifications.websocket import manager
 from app.schemas.common import ApiResponse
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
@@ -24,59 +20,43 @@ async def _resolve_employee_id(current_user: CurrentUser, employee_id_query: str
     return employee["id"]
 
 
-@router.get("/stream")
-async def notifications_stream(token: str = Query(...)):
+@router.websocket("/ws")
+async def notifications_websocket(websocket: WebSocket, token: str = Query(...)):
     """
-    SSE endpoint for live notifications.
-    The browser's EventSource API cannot send custom headers,
-    so the JWT access token is passed as a query parameter.
+    WebSocket endpoint for live notifications.
     """
     try:
         payload = decode_token(token)
     except ValueError as exc:
-        raise UnauthorizedException(str(exc)) from exc
+        await websocket.close(code=1008)
+        return
 
     if payload.get("type") != "access":
-        raise UnauthorizedException("Provide an access token")
+        await websocket.close(code=1008)
+        return
 
     user_id = payload.get("sub")
     role = payload.get("role")
     if not user_id or not role:
-        raise UnauthorizedException("Malformed token payload")
+        await websocket.close(code=1008)
+        return
 
-    current_user = CurrentUser(user_id=user_id, role=role)
-
-    # For employees, scope to their own record; admins stream all (by convention use their userId)
+    # For employees, scope to their own record; admins stream on their userId channel
     if role == "admin":
-        employee_id = user_id
+        channel_id = user_id
+        is_admin = True
     else:
         employee = await get_employee_by_user_id(user_id)
-        employee_id = employee["id"]
+        channel_id = employee["id"]
+        is_admin = False
 
-    q = stream.subscribe(employee_id)
-
-    async def event_generator():
-        try:
-            # Send a ping immediately so the browser knows the connection is alive
-            yield "event: ping\ndata: connected\n\n"
-            while True:
-                try:
-                    notification = await asyncio.wait_for(q.get(), timeout=30)
-                    yield f"data: {json.dumps(notification)}\n\n"
-                except asyncio.TimeoutError:
-                    # Send a keepalive comment every 30s to prevent connection drop
-                    yield ": keepalive\n\n"
-        finally:
-            stream.unsubscribe(employee_id, q)
-
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",  # disables nginx buffering
-        },
-    )
+    await manager.connect(websocket, channel_id, is_admin=is_admin)
+    try:
+        while True:
+            # Keep connection alive; we don't expect messages from the client
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket, channel_id)
 
 
 @router.get("", response_model=ApiResponse)

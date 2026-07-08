@@ -17,7 +17,7 @@ async def create_employee(payload: EmployeeCreate, current_user: CurrentUser = D
     
     await create_notification(
         employee_id=current_user.user_id,
-        message=f"New employee/user '{payload.name}' was created successfully.",
+        message=f"New employee '{payload.name}' was created successfully.",
         type=NotificationType.SUCCESS,
     )
     
